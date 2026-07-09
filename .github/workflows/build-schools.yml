@@ -1,0 +1,30 @@
+name: Build School List
+
+on:
+  workflow_dispatch: {}  # Actionsタブから手動で実行するためのボタン
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: 対象校リストを作成
+        run: python build_school_list.py
+
+      - name: 結果をコミット
+        run: |
+          git config user.name "koshien-watcher-bot"
+          git config user.email "actions@github.com"
+          git add data/target_schools.csv
+          git diff --staged --quiet || git commit -m "update target_schools.csv"
+          git push
