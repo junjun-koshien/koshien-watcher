@@ -34,7 +34,8 @@ def fetch_prefecture_schools(pref: str, slug: str) -> dict:
     url = BASE_URL.format(slug=slug)
     resp = requests.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
+    # 文字コードの自動判定はrequestsではなくBeautifulSoup側に任せる（文字化け対策）
+    soup = BeautifulSoup(resp.content, "html.parser")
 
     counts = defaultdict(lambda: {"spring": 0, "summer": 0})
 
