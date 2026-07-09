@@ -180,3 +180,80 @@ def check_prefecture(pref: str, category_id: int, target_schools: dict, notified
             score_w, score_l = g["score2"], g["score1"]
         else:
             continue  # 引き分け・再試合など
+          
+      if loser not in target_schools:
+            continue
+
+        game_key = f"{pref}|{g['round']}|{g['team1']}|{g['team2']}|{g['score1']}-{g['score2']}"
+        if game_key in notified:
+            continue
+
+        counts = target_schools[loser]
+        note = game_note(g["innings"], abs(score_w - score_l))
+        print(f"  [敗退検知] {pref}: {loser}（春{counts['spring']}回、夏{counts['summer']}回）"
+              f"が {winner} に {score_l}-{score_w}{'（' + note + '）' if note else ''} で敗退")
+        if not dry_run:
+            send_discord_notification(webhook_url, pref, loser, winner, score_l, score_w,
+                                       g["round"], g["date"], counts["spring"], counts["summer"], note)
+        notified.add(game_key)
+
+
+def run_once(prefectures, target_schools_by_pref, notified, webhook_url, dry_run):
+    for pref in prefectures:
+        category_id = PREF_CATEGORY.get(pref)
+        if category_id is None:
+            print(f"  [警告] 未知の都道府県: {pref}")
+            continue
+        target_schools = target_schools_by_pref.get(pref, {})
+        if not target_schools:
+            continue
+        print(f"チェック中: {pref}")
+        check_prefecture(pref, category_id, target_schools, notified, webhook_url, dry_run)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--once", action="store_true", help="1回だけチェックして終了")
+    parser.add_argument("--interval", type=int, default=300, help="ループ間隔（秒）。デフォルト300秒=5分")
+    parser.add_argument("--prefectures", type=str, default="",
+                         help="カンマ区切りで対象都道府県を限定（例: 東京,大阪）。省略時は全都道府県")
+    parser.add_argument("--dry-run", action="store_true", help="Discordに送らずログ表示のみ")
+    args = parser.parse_args()
+
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    if not webhook_url and not args.dry_run:
+        print("[エラー] 環境変数 DISCORD_WEBHOOK_URL を設定してください（--dry-run で確認だけも可能）")
+        sys.exit(1)
+
+    target_schools_by_pref = load_target_schools()
+    print(f"[デバッグ] 読み込んだ都道府県数: {len(target_schools_by_pref)}")
+    sample = list(target_schools_by_pref.items())[:3]
+    for p, s in sample:
+        print(f"[デバッグ] 都道府県名='{p}' (文字数:{len(p)}) 学校数={len(s)}")
+
+    notified = load_state()
+
+    prefectures = [p.strip() for p in args.prefectures.split(",") if p.strip()] or list(PREF_CATEGORY.keys())
+    print(f"[デバッグ] チェック対象の都道府県数: {len(prefectures)}")
+    if prefectures:
+        p0 = prefectures[0]
+        print(f"[デバッグ] 例: '{p0}' (文字数:{len(p0)}) はtarget_schools_by_prefに"
+              f"{'ある' if p0 in target_schools_by_pref else 'ない'}")
+
+    if args.once:
+        run_once(prefectures, target_schools_by_pref, notified, webhook_url, args.dry_run)
+        save_state(notified)
+    else:
+        try:
+            while True:
+                run_once(prefectures, target_schools_by_pref, notified, webhook_url, args.dry_run)
+                save_state(notified)
+                print(f"{args.interval}秒待機します...")
+                time.sleep(args.interval)
+        except KeyboardInterrupt:
+            save_state(notified)
+            print("終了します")
+
+
+if __name__ == "__main__":
+    main()
