@@ -20,23 +20,36 @@ from collections import defaultdict
 
 import requests
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from prefectures import PREF_SLUG
 
 BASE_URL = "https://kokobaseball.kumobit.com/bypref/past_{slug}.html"
 OUTPUT_PATH = "data/target_schools.csv"
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; KoshienWatcher/1.0; personal use)"}
-REQUEST_INTERVAL_SEC = 1.5  # サイトに負荷をかけないよう間隔を空ける
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) "
+                  "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ja-JP,ja;q=0.9",
+    "Referer": "https://kokobaseball.kumobit.com/bypref/pastpref_index.html",
+}
+REQUEST_INTERVAL_SEC = 3  # サイトに負荷をかけないよう間隔を空ける
+
+session = requests.Session()
+session.mount("https://", HTTPAdapter(max_retries=Retry(
+    total=3, backoff_factor=2, status_forcelist=[429, 500, 502, 503, 504]
+)))
 
 
 def fetch_prefecture_schools(pref: str, slug: str) -> dict:
     """1都道府県ページから 代表校 -> {spring: n, summer: n} を集計して返す"""
     url = BASE_URL.format(slug=slug)
-  resp = requests.get(url, headers=HEADERS, timeout=20)
+    resp = session.get(url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     # サイト側が申告する文字コードが信用できないため、UTF-8だと決め打ちして読み込む
     resp.encoding = "utf-8"
-    soup = BeautifulSoup(resp.text, "html.parser") 
+    soup = BeautifulSoup(resp.text, "html.parser")
 
     counts = defaultdict(lambda: {"spring": 0, "summer": 0})
 
