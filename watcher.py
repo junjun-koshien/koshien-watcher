@@ -172,4 +172,11 @@ def check_prefecture(pref: str, category_id: int, target_schools: dict, notified
     games = parse_games(article_text)
     for g in games:
         winner, loser = None, None
-        if g["score1"] > g
+        if g["score1"] > g["score2"]:
+            winner, loser = g["team1"], g["team2"]
+            score_w, score_l = g["score1"], g["score2"]
+        elif g["score2"] > g["score1"]:
+            winner, loser = g["team2"], g["team1"]
+            score_w, score_l = g["score2"], g["score1"]
+        else:
+            continue  # 引き分け・再試合など
