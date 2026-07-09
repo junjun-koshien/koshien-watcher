@@ -1,0 +1,35 @@
+name: Koshien Watcher
+
+on:
+  schedule:
+    # 10分おき。夏の予選期間（7月上旬〜8月上旬）は有効化し、それ以外はコメントアウト推奨
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}  # 手動実行用ボタン
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # state.json をリポジトリに書き戻すため
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 依存パッケージをインストール
+        run: pip install -r requirements.txt
+
+      - name: 予選結果をチェック
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python watcher.py --once
+
+      - name: 通知履歴をコミット
+        run: |
+          git config user.name "koshien-watcher-bot"
+          git config user.email "actions@github.com"
+          git add data/state.json
+          git diff --staged --quiet || git commit -m "update notified state"
+          git push
